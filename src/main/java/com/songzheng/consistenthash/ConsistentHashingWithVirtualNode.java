@@ -47,6 +47,28 @@ public class ConsistentHashingWithVirtualNode {
         }
     }
 
+    private synchronized static void refreshHashCircle() {
+        virtualNodes.clear();
+        for (String realGroup : realGroups) {
+            for (int i = 0; i < VIRTUAL_NODE_NUM; i++) {
+                String virtualNodeName = getVirtualNodeName(realGroup, i);
+                int hash = HashUtil.getHash(virtualNodeName);
+                virtualNodes.put(hash, virtualNodeName);
+//                System.out.println("[" + virtualNodeName + "] launched @ " + hash);
+            }
+        }
+    }
+
+    private synchronized static void addGroup(String identifier) {
+        realGroups.add(identifier);
+        refreshHashCircle();
+    }
+
+    private synchronized static void removeGroup(String identifier) {
+        realGroups.removeIf(s -> s.equals(identifier));
+        refreshHashCircle();
+    }
+
     private static String getVirtualNodeName(String realGroup, int i) {
         return String.format("%s&&VN-%d", realGroup, i);
     }
@@ -78,10 +100,10 @@ public class ConsistentHashingWithVirtualNode {
      * 生成随机数测试
      * @param args
      */
-    public static void main(String[] args) {
+    public static void main(String[] args) throws InterruptedException {
         Map<String, Integer> resMap = new HashMap<>();
 
-        for (int i = 0; i < 100000; i++) {
+        for (int i = 0; i < 10000000; i++) {
             int widgetId = new Random().nextInt(10000);
             String server = getServer(Integer.toString(widgetId));
             if (resMap.containsKey(server)) {
@@ -91,6 +113,23 @@ public class ConsistentHashingWithVirtualNode {
             }
         }
 
-        resMap.forEach((key, value) -> System.out.println("group " + key + ": " + value + "(" + value / 1000.0D + "%)"));
+        new Thread(() -> {
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            removeGroup("192.168.0.0:111");
+            System.out.println("removeGroup success");
+            try {
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
+            addGroup("192.168.0.0:10086");
+            System.out.println("addGroup success");
+        }).start();
+
+        resMap.forEach((key, value) -> System.out.println("group " + key + ": " + value + "(" + value / 100000.0D + "%)"));
     }
 }
